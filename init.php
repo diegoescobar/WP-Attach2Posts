@@ -10,8 +10,8 @@
 
 include ("utils.php");
 
-$is_test = true;
-// $is_test = false;
+// $is_test = true;
+$is_test = false;
 
 // add categories for attachments
 function add_categories_for_attachments() {
@@ -32,8 +32,14 @@ add_action( 'admin_init', 'attach2post__settings_init' );
 /** Remove Weird Wordpress sizes */
 remove_image_size('1536x1536');
 remove_image_size('2048x2048');
-remove_image_size('1536x1536');
-remove_image_size('2048x2048');
+
+add_filter('intermediate_image_sizes', function($sizes) {
+    return array_diff($sizes, ['2048x2048']);  // Medium Large (768 x 0)
+});
+
+add_filter('intermediate_image_sizes', function($sizes) {
+    return array_diff($sizes, ['1536x1536']);  // Medium Large (768 x 0)
+});
 
 add_filter('intermediate_image_sizes', function($sizes) {
     return array_diff($sizes, ['medium_large']);  // Medium Large (768 x 0)
@@ -164,6 +170,12 @@ function attach2post__settings_init(  ) {
             $postname_arr = explode('-', $post_title);
             if ( preg_match( '/wa[\d+?]/', $post_title )){
                 $post_title = $postname_arr[0];
+                $date = $post_title;
+
+                $date_str =  date('F jS, Y', mktime(0,0,0, intval($date[6].$date[7]), intval($date[4].$date[5]), intval($date[0].$date[1].$date[2].$date[3] ) ) );
+
+                $date_str;
+
             } else if( count($postname_arr) >= 2  ) {
                 if (ctype_alpha($postname_arr[0])){
                     
@@ -179,7 +191,7 @@ function attach2post__settings_init(  ) {
 
                 }else {
 
-                    $post_title = $postname_arr[0] . $postname_arr[1] . $postname_arr[2];
+                    $post_title = $postname_arr[0] . ' ' . $postname_arr[1] . ' ' . $postname_arr[2];
 
                 }
 
@@ -190,7 +202,7 @@ function attach2post__settings_init(  ) {
             }
         }
 
-
+        
         return $post_title;
 
     }
@@ -210,20 +222,39 @@ function attach2post__settings_init(  ) {
         }
         
         if( is_numeric( $date )){    
+
+
+
             
-            if (strlen($date) < 8) {
-                return false;
-            } else {
-                $date_str = date( 'Ymd', mktime(0,0,0, $date[4].$date[5],$date[6].$date[7], $date[0].$date[1].$date[2].$date[3]) );
+            
+            if (strlen($date) == 8) {
+
+                $year = intval( $date[0].$date[1].$date[2].$date[3] );
+                $month = intval( $date[4].$date[5] );
+                $day =  intval( $date[6].$date[7] );
+
+
+                if ($year == '1498'){
+                    return $date_str;
+                }
+
+                if ( $year < 2005 || $year > 2022 ){
+                    var_dump( array( $year, $month, $day));
+                    // return false;
+                    return $date_str;
+                }
+
+                $date_str = date( 'Ymd', mktime(0,0,0, $month, $day, $year) );
             }
+            
 
-            if (checkdate(intval($date[6].$date[7]), intval($date[4].$date[5]), intval($date[0].$date[1].$date[2].$date[3] ) ) ){
+            if (checkdate( $month, $day, $year ) ){
 
-                $date_str =  date('Ymd', mktime(0,0,0, intval($date[6].$date[7]), intval($date[4].$date[5]), intval($date[0].$date[1].$date[2].$date[3] ) ) );
+                $date_str =  date('Ymd', mktime(0,0,0, $month, $day, $year ) );
                 
             } else {
 
-                test_dump('WiT');
+                // test_dump('WiT');
 
                 /* 
                 test_dump ( intval($date[6].$date[7]),
@@ -231,23 +262,22 @@ function attach2post__settings_init(  ) {
                 intval($date[0].$date[1].$date[2].$date[3]) );
                 */
 
-                if (checkdate(
-                    intval($date[4].$date[5]),
-                    intval($date[6].$date[7]),
-                    intval($date[0].$date[1].$date[2].$date[3]))) {
-                        // echo "whut";
-
-                        $date_str =  $date[0].$date[1].$date[2].$date[3] . '-' . $date[6].$date[7] . '-' . $date[4].$date[5];
-                    }
+                if (checkdate( $month, $day, $year)) {
+                    // echo "whut";
+                    $date_str =  $year . '-' . $month . '-' . $day;
+                }
             }
 
-            // if (checkdate(
 
-
-            if (checkdate(intval($date[6].$date[7]), intval($date[4].$date[5]), intval($date[0].$date[1].$date[2].$date[3] ) ) ){
+            if (checkdate( $month, $day, $year ) ){
 
                 if ($date[0] == "0"){ return false; }
-                $date_str = $date[0].$date[1].$date[2].$date[3].'-'.$date[4].$date[5].'-'.$date[6].$date[7];
+
+                // echo "<h2>bad juju</h2>";
+
+                if ( $year > 2005 || $year < 2022 ){
+                    $date_str = $year.'-'.$month.'-'.$day;
+                }
             }
             test_dump ( $date_str );
         }
@@ -282,7 +312,10 @@ function attach2post__settings_init(  ) {
             $media_arr = array();
 
             $post_title = post_title_nonsense( $date->post_name );
+            
             $title_arr[] = $post_title;
+
+            $post_title = commonDateBeautify($post_title);
 
             $new_post_date = fuck_these_dates_up( $post_title );		
 
@@ -306,7 +339,7 @@ function attach2post__settings_init(  ) {
 			if (!is_null($page_path)){
 				$parent_id = $page_path->ID;
 
-                echo "post parent: " . $parent_id . '<br/>';
+                // echo "post parent: " . $parent_id . '<br/>';
 
 			} else {
 				$post_arr['post_title'] = $post_title;
@@ -328,6 +361,9 @@ function attach2post__settings_init(  ) {
                     $date = date("Y-m-d H:i:s", $time);
 
                     $new_post_date = $date;
+                // } else {
+                //     $post_arr['post_title'] = commonDateBeautify($post_title);
+                    
                 }
 
                 $post_arr['post_date'] = $new_post_date;
@@ -354,6 +390,7 @@ function attach2post__settings_init(  ) {
 			    $media_post = wp_update_post( $media_arr, false );
             } else {
                 var_dump( $post_arr );
+                var_dump( $media_arr );
             }
 		
 		}
