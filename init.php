@@ -10,8 +10,8 @@
 
 include ("utils.php");
 
-// $is_test = true;
-$is_test = false;
+$is_test = true;
+// $is_test = false;
 
 // add categories for attachments
 function add_categories_for_attachments() {
@@ -29,55 +29,47 @@ add_action( 'admin_menu', 'attach2post__add_admin_menu' );
 add_action( 'admin_init', 'attach2post__settings_init' );
 
 
-/** Remove Weird Wordpress sizes */
-remove_image_size('1536x1536');
-remove_image_size('2048x2048');
+function fuckupthese_othersizes(){
+    // global $_wp_additional_image_sizes; 
+    $sizes = wp_get_additional_image_sizes();
 
-add_filter('intermediate_image_sizes', function($sizes) {
-    return array_diff($sizes, ['2048x2048']);  // Medium Large (768 x 0)
-});
 
-add_filter('intermediate_image_sizes', function($sizes) {
-    return array_diff($sizes, ['1536x1536']);  // Medium Large (768 x 0)
-});
+    if (is_null( $sizes)){
+        return false;;
+    }
+    // var_dump( $sizes  );
 
-add_filter('intermediate_image_sizes', function($sizes) {
-    return array_diff($sizes, ['medium_large']);  // Medium Large (768 x 0)
-});
+    foreach ($sizes AS $size){
+        remove_image_size( $size );
 
-add_filter('intermediate_image_sizes', function($sizes) {
-    return array_diff($sizes, ['large']);  // Medium Large (768 x 0)
-});
+        add_filter('intermediate_image_sizes', function($sizes) {
+            global $size;
+            return array_diff($sizes, [$size]);  // Medium Large (768 x 0)
+        });
+    }
 
-add_filter('intermediate_image_sizes', function($sizes) {
-    return array_diff($sizes, ['medium']);  // Medium Large (768 x 0)
-});
-  
+    add_filter( 'intermediate_image_sizes_advanced', 'wpp2ap_remove_default_images' );
+    // This will remove the default image sizes and the medium_large size. 
+    function wpp2ap_remove_default_images( $sizes ) {
+        global $_wp_additional_image_sizes; 
+        $sizes = $_wp_additional_image_sizes;
 
-add_filter( 'intermediate_image_sizes_advanced', 'wpp2ap_remove_default_images' );
-// This will remove the default image sizes and the medium_large size. 
-function wpp2ap_remove_default_images( $sizes ) {
-    unset( $sizes['small']); // 150px
-    unset( $sizes['medium']); // 300px
-    unset( $sizes['large']); // 1024px
-    unset( $sizes['medium_large']); // 768px
-    
-
-    unset( $sizes['thumbnail']);
-    unset( $sizes['medium']);
-    unset( $sizes['medium_large']);
-    unset( $sizes['large']);
-    unset( $sizes['1536x1536']);
-    unset( $sizes['2048x2048']);
-
-    remove_image_size('medium');
-    remove_image_size('medium_large');
-    remove_image_size('large');
-    remove_image_size('1536x1536');
-    remove_image_size('2048x2048');
-    return $sizes;
+        foreach ($sizes AS $size){
+            unset( $sizes[ $size ]); 
+            remove_image_size( $size );
+        }
+        return $sizes;
+    }
 }
 
+// $sizes = wp_get_additional_image_sizes();
+
+// if (is_null( $sizes)){
+//     return false;;
+// }
+// var_dump( $sizes  );
+
+// fuckupthese_othersizes();
 
 function attach2post__add_admin_menu(  ) { 
 
@@ -134,8 +126,10 @@ function attach2post__settings_init(  ) {
 			FROM wp_posts
 			LEFT JOIN wp_postmeta ON wp_postmeta.post_id = wp_posts.ID
 			WHERE post_type = 'attachment'
-			AND post_mime_type = 'image/jpeg'
-			-- AND post_mime_type = 'video/mp4'
+
+			AND ( post_mime_type = 'image/jpeg'
+			OR post_mime_type = 'video/mp4' )
+
 			AND post_parent = 0
 			AND wp_postmeta.`meta_key`='_wp_attachment_metadata'
 			ORDER BY shortDate DESC
@@ -148,7 +142,7 @@ function attach2post__settings_init(  ) {
             return false;
         }
 
-        $postname = preg_replace(array('/unsorted[-_]/','/IMG[-_]/','/img[-_]/', '/user_scoped_temp_data_thumbnail/','/image/'), "", $title);
+        $postname = preg_replace(array('/unsorted[-_]/','/IMG[-_]/','/img[-_]/', '/user_scoped_temp_data_thumbnail/','/image/','/vid[_]/'), "", $title);
         
         $post_title = $postname;
 
@@ -222,11 +216,7 @@ function attach2post__settings_init(  ) {
         }
         
         if( is_numeric( $date )){    
-
-
-
-            
-            
+                        
             if (strlen($date) == 8) {
 
                 $year = intval( $date[0].$date[1].$date[2].$date[3] );
@@ -307,6 +297,12 @@ function attach2post__settings_init(  ) {
         $title_arr = array();
 
 		foreach ( $attachment_dates AS $date){
+
+            var_dump( $date );
+
+            $meta = maybe_unserialize( $date->meta_value );
+            var_dump( $meta );
+
             $new_post_date = "";
             $post_arr = array();
             $media_arr = array();
@@ -318,10 +314,8 @@ function attach2post__settings_init(  ) {
             $post_title = commonDateBeautify($post_title);
 
             $new_post_date = fuck_these_dates_up( $post_title );		
-
-            // echo $new_post_date  . " :: " . $post_title;
             
-            $meta = maybe_unserialize( $date->meta_value );
+            
             
             if (isset( $meta['image_meta']['created_timestamp']) && !is_null($meta['image_meta']['created_timestamp']) && $meta['image_meta']['created_timestamp'] != 0 ){
                 test_dump ( $meta['image_meta']['created_timestamp'] );
@@ -330,7 +324,11 @@ function attach2post__settings_init(  ) {
                     $new_post_date = $meta_date;
                 }
             }else{
-                test_dump ( array_filter(  $meta['image_meta'] ) );
+                if (!is_null($meta['image_meta'])){
+                    test_dump ( array_filter(  $meta['image_meta'] ) );
+                } else {
+                    test_dump ( array_filter(  $meta ) );
+                }
             }
 
 			$page_path = get_page_by_title( $post_title, OBJECT, 'post' );	
