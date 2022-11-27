@@ -52,3 +52,29 @@ function commonDateBeautify( $date_str ){
         return $return;
     }
 }
+
+
+function is_timestamp($timestamp) {
+
+	if (!preg_match('/(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})/', $timestamp) ){
+		return false;
+	} else 
+
+    if(strtotime(date('Y-m-d H:i:s',$timestamp)) === (int)$timestamp && isValidTimeStamp($timestamp)) {
+
+        return $timestamp;
+    } else {
+        // var_dump(array($timestamp, date('Y-m-d H:i:s',$timestamp)));
+        return false;
+    }
+}
+
+
+
+
+function isValidTimeStamp($timestamp)
+{
+    return ((string) (int) $timestamp === $timestamp) 
+        && ($timestamp <= PHP_INT_MAX)
+        && ($timestamp >= ~PHP_INT_MAX);
+}
