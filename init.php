@@ -29,277 +29,265 @@ add_action( 'admin_menu', 'attach2post__add_admin_menu' );
 add_action( 'admin_init', 'attach2post__settings_init' );
 
 
-/** Remove Weird Wordpress sizes */
-remove_image_size('1536x1536');
-remove_image_size('2048x2048');
-
-add_filter('intermediate_image_sizes', function($sizes) {
-    return array_diff($sizes, ['2048x2048']);  // Medium Large (768 x 0)
-});
-
-add_filter('intermediate_image_sizes', function($sizes) {
-    return array_diff($sizes, ['1536x1536']);  // Medium Large (768 x 0)
-});
-
-add_filter('intermediate_image_sizes', function($sizes) {
-    return array_diff($sizes, ['medium_large']);  // Medium Large (768 x 0)
-});
-
-add_filter('intermediate_image_sizes', function($sizes) {
-    return array_diff($sizes, ['large']);  // Medium Large (768 x 0)
-});
-
-add_filter('intermediate_image_sizes', function($sizes) {
-    return array_diff($sizes, ['medium']);  // Medium Large (768 x 0)
-});
-  
-
-add_filter( 'intermediate_image_sizes_advanced', 'wpp2ap_remove_default_images' );
-// This will remove the default image sizes and the medium_large size. 
-function wpp2ap_remove_default_images( $sizes ) {
-    unset( $sizes['small']); // 150px
-    unset( $sizes['medium']); // 300px
-    unset( $sizes['large']); // 1024px
-    unset( $sizes['medium_large']); // 768px
-    
-
-    unset( $sizes['thumbnail']);
-    unset( $sizes['medium']);
-    unset( $sizes['medium_large']);
-    unset( $sizes['large']);
-    unset( $sizes['1536x1536']);
-    unset( $sizes['2048x2048']);
-
-    remove_image_size('medium');
-    remove_image_size('medium_large');
-    remove_image_size('large');
-    remove_image_size('1536x1536');
-    remove_image_size('2048x2048');
-    return $sizes;
-}
-
-
 function attach2post__add_admin_menu(  ) { 
 
 	add_menu_page( 'Attach2Posts', 'Attach2Posts', 'manage_options', 'Attach2Posts', 'attach2post__options_page' );
 
 }
 
-
 function attach2post__settings_init(  ) { 
 
-	register_setting( 'upload2PostsPluginPage', 'attach2post__settings' );
+	register_setting( 'attach2postsPluginPage', 'attach2post__settings' );
 
 	add_settings_section(
-		'attach2post__upload2PostsPluginPage_section', 
+		'attach2post__attach2postsPluginPage_section', 
 		__( 'Your section description', 'code_' ), 
 		'attach2post__settings_section_callback', 
-		'upload2PostsPluginPage'
+		'attach2postsPluginPage'
 	);
 
 	add_settings_field( 
 		'attach2post__select_field_0', 
 		__( 'Settings field description', 'code_' ), 
 		'attach2post__select_field_0_render', 
-		'upload2PostsPluginPage', 
-		'attach2post__upload2PostsPluginPage_section' 
+		'attach2postsPluginPage', 
+		'attach2post__attach2postsPluginPage_section' 
 	);
 
 
 }
 
+function attach2post__select_field_0_render(  ) { 
+    global $wpdb;
+    // $options = get_option( 'attach2post__settings' );
 
-    function attach2post__select_field_0_render(  ) { 
-        $options = get_option( 'attach2post__settings' );
-        
-        if ($_REQUEST['page'] == 'Attach2Posts' && $_REQUEST['settings-updated'] == 'true'){
+    $common_stringtype = array('/screenshot[-_]/','/Screenshot[-_]/','/IMG[-_]/','/img[-_]/', '/user_scoped_temp_data_thumbnail[-_]/','/image[-_]/','/ipad[-_]/');
 
-            attach_media_to_post();
-        }
+    $mime_types = array_filter($wpdb->get_results( 'SELECT DISTINCT(post_mime_type) FROM wp_posts', ARRAY_A));
+    
+    if ( $mime_types['post_mime_type'][0] == "" ) {unset($mime_types[0]);}
 
+    ?>
+          <input name="text" 
+            type="text" 
+            value="" id="name"
+            placeholder="Hello World">
+            <?php //var_dump ( get_post_types() ); ?>
+            <br/>
+            <!-- TODO: Update to include custom post types --> 
+            <select id="post_type" name="post_type">
+                <option value="post">Post</option>
+                <option value="page">Page</option>
+            </select>
+            <br/>
+
+            <select id="post_type" name="post_type">
+            <?php 
+            foreach ( $mime_types AS $type ) {
+                echo '<option value="'.$type['post_mime_type'].'">'.$type['post_mime_type'].'</option>';
+            } ?>
+            </select>
+            <br/>
+
+            <select id="post_status" name="post_status">
+            <?php 
+            foreach ( get_post_statuses() AS $slug=>$status ){
+                echo '<option value="'.$slug.'">'.$status.'</option>';
+            } 
+            ?>
+            </select>
+            <br/>
+            Comma Seperated Category List
+            <textarea id="category_list" name="category">Gallery, </textarea>
+
+            <br/>
+            Comma Seperated Tags List
+            <textarea id="tag_list" name="tag">{Video/Image},</textarea>
+            </select>
+    <?php
+
+}
+
+function get_date_attachments(){
+    global $wpdb;
+    return $wpdb->get_results(
+        "SELECT 
+        ID, 
+        SUBSTRING_INDEX( post_name, '_', 1)  AS shortDate,
+        post_name, 
+        post_title,
+        post_parent, 
+        post_mime_type,
+        post_date,
+        wp_postmeta.meta_value
+        FROM wp_posts
+        LEFT JOIN wp_postmeta ON wp_postmeta.post_id = wp_posts.ID
+        WHERE post_type = 'attachment'
+        AND ( post_mime_type = 'image/jpeg'
+        or post_mime_type = 'video/mp4' )
+        AND post_parent = 0
+        AND wp_postmeta.`meta_key`='_wp_attachment_metadata'
+        ORDER BY shortDate DESC
+        "
+    );
+}
+
+function post_title_nonsense( $title ){
+    if (!$title){
+        return false;
     }
 
-	function get_date_attachments(){
-		global $wpdb;
-		return $wpdb->get_results(
-			"SELECT 
-			ID, 
-			SUBSTRING_INDEX( post_name, '_', 1)  AS shortDate,
-			post_name, 
-			post_title,
-			post_parent, 
-			post_mime_type,
-			post_date,
-			wp_postmeta.meta_value
-			FROM wp_posts
-			LEFT JOIN wp_postmeta ON wp_postmeta.post_id = wp_posts.ID
-			WHERE post_type = 'attachment'
-			AND ( post_mime_type = 'image/jpeg'
-			or post_mime_type = 'video/mp4' )
-			AND post_parent = 0
-			AND wp_postmeta.`meta_key`='_wp_attachment_metadata'
-			ORDER BY shortDate DESC
-			"
-		);
-	}
+    $postname = preg_replace(array('/unsorted[-_]/','/screenshot[-_]/','/Screenshot[-_]/','/ssstwitter[-_.]com[-_]/','/IMG[-_]/','/img[-_]/', '/user_scoped_temp_data_thumbnail[-_]/','/image[-_]/','/ipad[-_]/'), "", $title);
+    
+    $post_title = $postname;
 
-    function post_title_nonsense( $title ){
-        if (!$title){
-            return false;
+    if (is_int($postname)){
+        $post_title = $title;
+    }
+
+    test_dump( $post_title );
+
+    if( preg_match_all('/[_]/', $postname, $underMatches) ){
+        $undermatch_arr = explode('_', $postname);
+        if( count($underMatches) == 1 ) {
+            $post_title = $undermatch_arr[0];
         }
-
-        $postname = preg_replace(array('/unsorted[-_]/','/screenshot[-_]/','/Screenshot[-_]/','/ssstwitter[-_.]com[-_]/','/IMG[-_]/','/img[-_]/', '/user_scoped_temp_data_thumbnail[-_]/','/image[-_]/','/ipad[-_]/'), "", $title);
-        
-        $post_title = $postname;
-
-        if (is_int($postname)){
-            $post_title = $title;
-        }
-
-        test_dump( $post_title );
-
-        if( preg_match_all('/[_]/', $postname, $underMatches) ){
-            $undermatch_arr = explode('_', $postname);
-            if( count($underMatches) == 1 ) {
-                $post_title = $undermatch_arr[0];
-            }
-        }
+    }
 
 
-        if( preg_match_all('/[-]/', $postname, $dashMatches) ){
-            $postname_arr = explode('-', $post_title);
-            if ( preg_match( '/wa[\d+?]/', $post_title )){
-                $post_title = $postname_arr[0];
-                $date = $post_title;
+    if( preg_match_all('/[-]/', $postname, $dashMatches) ){
+        $postname_arr = explode('-', $post_title);
+        if ( preg_match( '/wa[\d+?]/', $post_title )){
+            $post_title = $postname_arr[0];
+            $date = $post_title;
 
-                $date_str =  date('F jS, Y', mktime(0,0,0, intval($date[6].$date[7]), intval($date[4].$date[5]), intval($date[0].$date[1].$date[2].$date[3] ) ) );
+            $date_str =  date('F jS, Y', mktime(0,0,0, intval($date[6].$date[7]), intval($date[4].$date[5]), intval($date[0].$date[1].$date[2].$date[3] ) ) );
 
-                $date_str;
+            $date_str;
 
-            } else if( count($postname_arr) >= 2  ) {
-                if (ctype_alpha($postname_arr[0])){
-                    
-                    // $post_title = $postname_arr[2] .'-'. $postname_arr[1] .'-'. date('m', strtotime( $postname_arr[0] ));
+        } else if( count($postname_arr) >= 2  ) {
+            if (ctype_alpha($postname_arr[0])){
+                
+                // $post_title = $postname_arr[2] .'-'. $postname_arr[1] .'-'. date('m', strtotime( $postname_arr[0] ));
 
-                    $post_title = $postname_arr[2] . date('m', strtotime( $postname_arr[0] )) . $postname_arr[1];
-
-                    test_dump( $post_title );
-
-                } else if (ctype_alpha($postname_arr[0]) && ctype_alpha($postname_arr[1]) ){ 
-
-                    $post_title = $postname_arr[0] . '-' . $postname_arr[1];
-
-                }else {
-
-                    $post_title = $postname_arr[0] . ' ' . $postname_arr[1] . ' ' . $postname_arr[2];
-
-                }
+                $post_title = $postname_arr[2] . date('m', strtotime( $postname_arr[0] )) . $postname_arr[1];
 
                 test_dump( $post_title );
 
-            } else {
-                $post_title = $postname_arr[0];
-            }
-        }
+            } else if (ctype_alpha($postname_arr[0]) && ctype_alpha($postname_arr[1]) ){ 
 
-        
-        return $post_title;
+                $post_title = $postname_arr[0] . '-' . $postname_arr[1];
 
-    }
+            }else {
 
-    function fuck_these_dates_up( $date ){
-        $posttime = '16:15:30';
+                $post_title = $postname_arr[0] . ' ' . $postname_arr[1] . ' ' . $postname_arr[2];
 
-        if( preg_match_all('/[-]/', $date) ){
-            $date_arr = explode( '-', $date );
-            $date_strng = $date_arr[0];
-            
-            if (!preg_match('/^[\pL\d]+\z/', $date_strng)){
-                $date_str = $date_arr[0].'-'.$date_arr[1].'-'.$date_arr[2];
             }
 
-            test_dump( $date_strng );
-        }
-        
-        if( is_numeric( $date )){    
+            test_dump( $post_title );
 
-
-            if ( is_timestamp ( gmdate( "Y-m-d H:i:s", $date ) ) ){
-                $new_post_date = gmdate("Y-m-d H:i:s", $date );
-            }
-            
-            if (strlen($date) == 8) {
-
-                $year = intval( $date[0].$date[1].$date[2].$date[3] );
-                $month = intval( $date[4].$date[5] );
-                $day =  intval( $date[6].$date[7] );
-
-
-                if ($year == '1498'){
-                    return $date_str;
-                }
-
-                if ( $year < 2005 || $year > 2022 ){
-                    var_dump( array( $year, $month, $day));
-                    // return false;
-                    return $date_str;
-                }
-
-                $date_str = date( 'Ymd', mktime(0,0,0, $month, $day, $year) );
-            }
-            
-
-            if (checkdate( $month, $day, $year ) ){
-
-                $date_str =  date('Ymd', mktime(0,0,0, $month, $day, $year ) );
-                
-            } else {
-
-                // test_dump('WiT');
-
-                /* 
-                test_dump ( intval($date[6].$date[7]),
-                intval($date[4].$date[5]),
-                intval($date[0].$date[1].$date[2].$date[3]) );
-                */
-
-                if (checkdate( $month, $day, $year)) {
-                    // echo "whut";
-                    $date_str =  $year . '-' . $month . '-' . $day;
-                }
-            }
-
-
-            if (checkdate( $month, $day, $year ) ){
-
-                if ($date[0] == "0"){ return false; }
-
-                // echo "<h2>bad juju</h2>";
-
-                if ( $year > 2005 || $year < 2022 ){
-                    $date_str = $year.'-'.$month.'-'.$day;
-                }
-            }
-            test_dump ( $date_str );
-        }
-
-        if (ctype_alpha( $date_str ) ){
-            test_dump ( $date_str );
-            return false;
-        } else if (is_null($date_str)){
-            test_dump ( $date_str );
-            return false;
-        } 
-        
-        $timestamp = $date_str . ' ' . $posttime;
-        
-        if (is_timestamp ( $timestamp ) ) {
-            return $timestamp;
         } else {
+            $post_title = $postname_arr[0];
         }
-
     }
 
+    
+    return $post_title;
+
+}
+
+function fuck_these_dates_up( $date ){
+    $posttime = '16:15:30';
+
+    if( preg_match_all('/[-]/', $date) ){
+        $date_arr = explode( '-', $date );
+        $date_strng = $date_arr[0];
+        
+        if (!preg_match('/^[\pL\d]+\z/', $date_strng)){
+            $date_str = $date_arr[0].'-'.$date_arr[1].'-'.$date_arr[2];
+        }
+
+        test_dump( $date_strng );
+    }
+    
+    if( is_numeric( $date )){    
+
+
+        if ( is_timestamp ( gmdate( "Y-m-d H:i:s", $date ) ) ){
+            $new_post_date = gmdate("Y-m-d H:i:s", $date );
+        }
+        
+        if (strlen($date) == 8) {
+
+            $year = intval( $date[0].$date[1].$date[2].$date[3] );
+            $month = intval( $date[4].$date[5] );
+            $day =  intval( $date[6].$date[7] );
+
+
+            if ($year == '1498'){
+                return $date_str;
+            }
+
+            if ( $year < 2005 || $year > 2022 ){
+                var_dump( array( $year, $month, $day));
+                // return false;
+                return $date_str;
+            }
+
+            $date_str = date( 'Ymd', mktime(0,0,0, $month, $day, $year) );
+        }
+        
+
+        if (checkdate( $month, $day, $year ) ){
+
+            $date_str =  date('Ymd', mktime(0,0,0, $month, $day, $year ) );
+            
+        } else {
+
+            // test_dump('WiT');
+
+            /* 
+            test_dump ( intval($date[6].$date[7]),
+            intval($date[4].$date[5]),
+            intval($date[0].$date[1].$date[2].$date[3]) );
+            */
+
+            if (checkdate( $month, $day, $year)) {
+                // echo "whut";
+                $date_str =  $year . '-' . $month . '-' . $day;
+            }
+        }
+
+
+        if (checkdate( $month, $day, $year ) ){
+
+            if ($date[0] == "0"){ return false; }
+
+            // echo "<h2>bad juju</h2>";
+
+            if ( $year > 2005 || $year < 2022 ){
+                $date_str = $year.'-'.$month.'-'.$day;
+            }
+        }
+        test_dump ( $date_str );
+    }
+
+    if (ctype_alpha( $date_str ) ){
+        test_dump ( $date_str );
+        return false;
+    } else if (is_null($date_str)){
+        test_dump ( $date_str );
+        return false;
+    } 
+    
+    $timestamp = $date_str . ' ' . $posttime;
+    
+    if (is_timestamp ( $timestamp ) ) {
+        return $timestamp;
+    } else {
+    }
+
+}
 
 function attach_media_to_post(){
     global $is_test;
@@ -417,22 +405,30 @@ function attach_media_to_post(){
 
 function attach2post__settings_section_callback(  ) { 
 
-	echo __( 'Create Posts and Galleries from Attachments with similar names & timestamps', 'code_' );
+    echo __( 'Create Posts and Galleries from Attachments with similar names & timestamps', 'code_' );
 
 }
 
 function attach2post__options_page(  ) { 
     ?>
-		<form action='options.php' method='post'>
+        <form action='options.php' method='POST'>
 
-			<h2>Attach2Posts</h2>
+            <h2>Attach2Posts</h2>            
 
-			<?php
-			settings_fields( 'upload2PostsPluginPage' );
-			do_settings_sections( 'upload2PostsPluginPage' );
-			submit_button('Run Update');
-			?>
+            <?php
 
-		</form>
+
+            if ($_REQUEST['page'] == 'Attach2Posts' && $_REQUEST['settings-updated'] == 'true'){
+
+                // attach_media_to_post();
+
+                var_dump( $_REQUEST );
+            }
+
+            settings_fields( 'attach2postsPluginPage' );
+            do_settings_sections( 'attach2postsPluginPage' );
+            submit_button('Run Update');
+            ?>
+        </form>
     <?php
 }
