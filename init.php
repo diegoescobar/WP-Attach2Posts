@@ -1,14 +1,15 @@
 <?php
 /*
-    Plugin Name: Uploads2Posts
-	Plugin URI: Wut
-	Description: Creates posts and galleries based on similarly named photos, typically by timestamp
+    Plugin Name: Attachments2Posts
+	Plugin URI: http://stage.diegoescobar.ca/plugins/Attach2Posts
+	Description: Creates posts and galleries based on similarly named photos, typically by timestamp, & reorders upload folders
 	Author: Diego Esscobar
 	Author URI: https://diegoescobar.ca/
 	License: GPL v2 or later
     */
 
 include ("utils.php");
+include ("post-builder.php");
 
 $is_test = true;
 // $is_test = false;
@@ -17,17 +18,19 @@ $is_test = true;
 function add_categories_for_attachments() {
     register_taxonomy_for_object_type( 'category', 'attachment' );
 }
-add_action( 'init' , 'add_categories_for_attachments' );
+// add_action( 'init' , 'add_categories_for_attachments' );
 
 // add tags for attachments
 function add_tags_for_attachments() {
-    register_taxonomy_for_object_type( 'post_tag', 'attachment' );
+    register_taxonomy_for_object_type( 'tag', 'attachment' );
 }
-add_action( 'init' , 'add_tags_for_attachments' );
+// add_action( 'init' , 'add_tags_for_attachments' );
 
 add_action( 'admin_menu', 'attach2post__add_admin_menu' );
 add_action( 'admin_init', 'attach2post__settings_init' );
 
+
+// fuckupthese_othersizes();
 
 function attach2post__add_admin_menu(  ) { 
 
@@ -35,27 +38,60 @@ function attach2post__add_admin_menu(  ) {
 
 }
 
+
 function attach2post__settings_init(  ) { 
 
-	register_setting( 'attach2postsPluginPage', 'attach2post__settings' );
+	register_setting( 'attach2postPluginPage', 'attach2post__settings' );
 
 	add_settings_section(
-		'attach2post__attach2postsPluginPage_section', 
+		'attach2post__attach2postPluginPage_section', 
 		__( 'Your section description', 'code_' ), 
 		'attach2post__settings_section_callback', 
-		'attach2postsPluginPage'
+		'attach2postPluginPage'
 	);
 
 	add_settings_field( 
 		'attach2post__select_field_0', 
 		__( 'Settings field description', 'code_' ), 
 		'attach2post__select_field_0_render', 
-		'attach2postsPluginPage', 
-		'attach2post__attach2postsPluginPage_section' 
+		'attach2postPluginPage', 
+		'attach2post__attach2postPluginPage_section' 
 	);
+}
 
+
+function attach2post__select_field_0_render(  ) { 
+    global $wpdb;
+    $options = get_option( 'attach2post__settings' );
+    
+    if ($_REQUEST['page'] == 'Attach2Posts' && isset($_POST['submit']) ){
+        // var_dump( $_POST );
+        attach2post__attach_media_to_post( $_POST );
+    } else {
+        echo "<p><u>Preview</u></p>";
+        var_dump( $_REQUEST );
+        attach2post__preview_posts();
+    }
 
 }
+
+
+function attach2post__preview_posts(){
+    global $wpdb;
+
+    $attachment_dates = attach2post__get_date_attachments();
+    $name_arr = array();
+
+    foreach ( $attachment_dates AS $date){
+
+        $parsed_title = attach2post__post_title_nonsense( $date->post_name );
+        $name_arr[] = $parsed_title;
+    }
+    foreach ( array_unique( $name_arr ) AS $data){
+        echo $data . '<br/>';
+    }
+}
+
 
 
 function attach2post__form_input_render() {
@@ -110,269 +146,95 @@ function attach2post__form_input_render() {
 
 }
 
-function attach2post__select_field_0_render(  ) { 
-    global $wpdb;
-    // $options = get_option( 'attach2post__settings' );
-}
-
-function get_date_data( $array ){
-    global $wpdb;
-    
-    $query = "SELECT 
-        ID, 
-        SUBSTRING_INDEX( post_name, '_', 1)  AS shortDate,
-        post_name, 
-        post_title,
-        post_parent, 
-        post_mime_type,
-        post_date,
-        wp_postmeta.meta_value
-        FROM wp_posts
-        LEFT JOIN wp_postmeta ON wp_postmeta.post_id = wp_posts.ID
-        WHERE post_type = 'attachment' ";
-
-    if ( $array['post_mime_type'] !== "all" ){
-        $query .= "AND post_mime_type = '".$array['post_mime_type']."' ";
-    }
-        
-    $query .= "AND post_parent = 0
-        AND wp_postmeta.`meta_key`='_wp_attachment_metadata'
-        ORDER BY shortDate DESC";
-    
-    return $wpdb->get_results( $query );
-}
 
 
-function get_date_attachments(){
-    global $wpdb;
-    return $wpdb->get_results(
-        "SELECT 
-        ID, 
-        SUBSTRING_INDEX( post_name, '_', 1)  AS shortDate,
-        post_name, 
-        post_title,
-        post_parent, 
-        post_mime_type,
-        post_date,
-        wp_postmeta.meta_value
-        FROM wp_posts
-        LEFT JOIN wp_postmeta ON wp_postmeta.post_id = wp_posts.ID
-        WHERE post_type = 'attachment'
-        AND ( post_mime_type = 'image/jpeg'
-        or post_mime_type = 'video/mp4' )
-        AND post_parent = 0
-        AND wp_postmeta.`meta_key`='_wp_attachment_metadata'
-        ORDER BY shortDate DESC
-        "
-    );
-}
-
-function post_title_nonsense( $title ){
-    if (!$title){
-        return false;
-    }
-
-    $postname = preg_replace(array('/unsorted[-_]/','/screenshot[-_]/','/Screenshot[-_]/','/ssstwitter[-_.]com[-_]/','/IMG[-_]/','/img[-_]/', '/user_scoped_temp_data_thumbnail[-_]/','/image[-_]/','/ipad[-_]/'), "", $title);
-    
-    $post_title = $postname;
-
-    if (is_int($postname)){
-        $post_title = $title;
-    }
-
-    test_dump( $post_title );
-
-    if( preg_match_all('/[_]/', $postname, $underMatches) ){
-        $undermatch_arr = explode('_', $postname);
-        if( count($underMatches) == 1 ) {
-            $post_title = $undermatch_arr[0];
-        }
-    }
-
-
-    if( preg_match_all('/[-]/', $postname, $dashMatches) ){
-        $postname_arr = explode('-', $post_title);
-        if ( preg_match( '/wa[\d+?]/', $post_title )){
-            $post_title = $postname_arr[0];
-            $date = $post_title;
-
-            $date_str =  date('F jS, Y', mktime(0,0,0, intval($date[6].$date[7]), intval($date[4].$date[5]), intval($date[0].$date[1].$date[2].$date[3] ) ) );
-
-            $date_str;
-
-        } else if( count($postname_arr) >= 2  ) {
-            if (ctype_alpha($postname_arr[0])){
-                
-                // $post_title = $postname_arr[2] .'-'. $postname_arr[1] .'-'. date('m', strtotime( $postname_arr[0] ));
-
-                $post_title = $postname_arr[2] . date('m', strtotime( $postname_arr[0] )) . $postname_arr[1];
-
-                test_dump( $post_title );
-
-            } else if (ctype_alpha($postname_arr[0]) && ctype_alpha($postname_arr[1]) ){ 
-
-                $post_title = $postname_arr[0] . '-' . $postname_arr[1];
-
-            }else {
-
-                $post_title = $postname_arr[0] . ' ' . $postname_arr[1] . ' ' . $postname_arr[2];
-
-            }
-
-            test_dump( $post_title );
-
-        } else {
-            $post_title = $postname_arr[0];
-        }
-    }
-
-    
-    return $post_title;
-
-}
-
-function fuck_these_dates_up( $date ){
-    $posttime = '16:15:30';
-
-    if( preg_match_all('/[-]/', $date) ){
-        $date_arr = explode( '-', $date );
-        $date_strng = $date_arr[0];
-        
-        if (!preg_match('/^[\pL\d]+\z/', $date_strng)){
-            $date_str = $date_arr[0].'-'.$date_arr[1].'-'.$date_arr[2];
-        }
-
-        test_dump( $date_strng );
-    }
-    
-    if( is_numeric( $date )){    
-
-
-        if ( is_timestamp ( gmdate( "Y-m-d H:i:s", $date ) ) ){
-            $new_post_date = gmdate("Y-m-d H:i:s", $date );
-        }
-        
-        if (strlen($date) == 8) {
-
-            $year = intval( $date[0].$date[1].$date[2].$date[3] );
-            $month = intval( $date[4].$date[5] );
-            $day =  intval( $date[6].$date[7] );
-
-
-            if ($year == '1498'){
-                return $date_str;
-            }
-
-            if ( $year < 2005 || $year > 2022 ){
-                var_dump( array( $year, $month, $day));
-                // return false;
-                return $date_str;
-            }
-
-            $date_str = date( 'Ymd', mktime(0,0,0, $month, $day, $year) );
-        }
-        
-
-        if (checkdate( $month, $day, $year ) ){
-
-            $date_str =  date('Ymd', mktime(0,0,0, $month, $day, $year ) );
-            
-        } else {
-
-            // test_dump('WiT');
-
-            /* 
-            test_dump ( intval($date[6].$date[7]),
-            intval($date[4].$date[5]),
-            intval($date[0].$date[1].$date[2].$date[3]) );
-            */
-
-            if (checkdate( $month, $day, $year)) {
-                // echo "whut";
-                $date_str =  $year . '-' . $month . '-' . $day;
-            }
-        }
-
-
-        if (checkdate( $month, $day, $year ) ){
-
-            if ($date[0] == "0"){ return false; }
-
-            // echo "<h2>bad juju</h2>";
-
-            if ( $year > 2005 || $year < 2022 ){
-                $date_str = $year.'-'.$month.'-'.$day;
-            }
-        }
-        test_dump ( $date_str );
-    }
-
-    if (ctype_alpha( $date_str ) ){
-        test_dump ( $date_str );
-        return false;
-    } else if (is_null($date_str)){
-        test_dump ( $date_str );
-        return false;
-    } 
-    
-    $timestamp = $date_str . ' ' . $posttime;
-    
-    if (is_timestamp ( $timestamp ) ) {
-        return $timestamp;
-    } else {
-    }
-
-}
-
-function attach_media_to_post( $array ){
+function attach2post__attach_media_to_post( $array ){
     global $is_test;
-
-    // 'text' => string 'test' (length=4)
-    // 'post_type' => string 'video/mp4' (length=9)
-    // 'post_status' => string 'draft' (length=5)
-    // 'category' => string 'Gallery, ' (length=9)
-    // 'tag' => string '{Video/Image},' (length=14)
+    global $wpdb;
     
-    $attachment_dates = get_date_data( $array );
-    // $attachment_dates = get_date_attachments();
-    $title_arr = array();
-    // var_dump( $attachment_dates );
+    // $attachment_dates = attach2post__get_date_attachments();
+    $attachment_dates = attach2post__get_date_data( $array );
 
     foreach ( $attachment_dates AS $date){
-
-        // var_dump( $date );
-
-        $new_post_date = "";
-        $post_arr = array();
-        $media_arr = array();
-
-        $post_title = post_title_nonsense( $date->post_name );
-
-        
-        $title_arr[] = $post_title;
-
-        $post_title = commonDateBeautify($post_title);
-
-        $new_post_date = fuck_these_dates_up( $post_title );		
-
         $meta = maybe_unserialize( $date->meta_value );
-        
-        if (isset( $meta['image_meta']['created_timestamp']) && !is_null($meta['image_meta']['created_timestamp']) && $meta['image_meta']['created_timestamp'] != 0 ){
-            test_dump ( $meta['image_meta']['created_timestamp'] );
-            $meta_date = date ("Y-m-d H:i:s", $meta['image_meta']['created_timestamp'] );
-            if($meta_date != "1970-01-01 00:00:00"){
-                $new_post_date = $meta_date;
-            }
-        }else{
-            test_dump ( array_filter(  $meta ) );
+        $new_post_meta_date = check_meta_date( $meta );
+
+        $parsed_title = attach2post__post_title_nonsense( $date->post_name );
+
+        $new_post_date = attach2post__fuck_these_dates_up( $parsed_title );
+
+        if (!is_null( $new_post_meta_date )){
+            $new_post_date = $new_post_meta_date;
         }
 
+        $post_title = commonDateBeautify( $parsed_title );
+
+        $new_upload_folder = ( commonDateBeautify( $parsed_title, 'Y/m/' ) );
+
+        $path_check_arr = explode('/', $new_upload_folder);
+
+
+        if (count($path_check_arr) == 3){
+            $upload_folder = 'wp-content/uploads/';
+            $regex = "@(https?://([-\w\.]+[-\w])+(:\d+)?(/([\w/_\.#-]*?)?)?)@";
+            $filename = explode('/', $date->guid );
+            $orig_path = preg_replace($regex, '', $date->guid);
+            $new_path =  $upload_folder . $new_upload_folder . $filename[ count($filename) - 1];
+
+            $upload_dir   = wp_upload_dir();
+            if (!is_dir('../'. $upload_folder.'/'.$new_upload_folder)){
+                $newdir = mkdir( '../'. $upload_folder.'/'.$new_upload_folder, 0777 );
+            }
+
+            if (!file_exists('../'.$new_path) && file_exists( '../'. $orig_path)){
+                
+                if (!file_exists('../'.$orig_path)){
+                    //for testing, just copy
+                    copy ('../'.$orig_path, '../'.$new_path);
+                    // rename ('../'.$orig_path, '../'.$new_path);
+                }
+
+                $new_guid = get_bloginfo('url') .'/'. $new_path;
+            }
+
+
+            $new_post_date = ( commonDateBeautify( $parsed_title, 'Y-m-d H:i:s' ) );
+
+            if ($orig_path != $new_path && $new_guid != ""){
+
+                $table_name = $wpdb->prefix.'posts';
+                $data_update = array('guid' => $new_guid, 'post_date' => $new_post_date, 'post_date_gmt' => $new_post_date);
+                $data_where = array('ID' => $date->ID);
+                $wpdb->update($table_name , $data_update, $data_where);
+
+                $newattachedfile =  $new_upload_folder . $filename[ count($filename) - 1];
+                $meta_table_name = $wpdb->prefix.'postmeta';
+                $meta_data_update = array('meta_value' =>  $newattachedfile);
+                $meta_data_where = array('meta_key' => "_wp_attached_file", "post_id" => $date->ID);
+                $wpdb->update($meta_table_name , $meta_data_update, $meta_data_where);
+
+                
+            }else if ($date->post_date != $new_post_date){
+                $table_name = $wpdb->prefix.'posts';
+                $data_update = array('post_date' => $new_post_date, 'post_date_gmt' => $new_post_date);
+                $data_where = array('ID' => $date->ID);
+                $wpdb->update($table_name , $data_update, $data_where);
+            }
+
+            
+        }
+
+
+        // var_dump( $new_post_date );
+        
         $page_path = get_page_by_title( $post_title, OBJECT, 'post' );	
         $parent_id = 0;
 
         if (!is_null($page_path)){
             $parent_id = $page_path->ID;
+
         } else {
+
             $post_arr['post_title'] = $post_title;
 
             if ($date->post_mime_type == 'image/jpeg'){
@@ -380,33 +242,58 @@ function attach_media_to_post( $array ){
                 [gallery]
                 <!-- /wp:shortcode -->';
                 $post_arr['post_format'] = 'gallery';
+                $post_tag = 'Photos';
             }else if ( $date->post_mime_type == 'video/mp4' ){
+                // $post_arr['post_title'] = fuckin_epoch_dates('F jS, Y', $post_title);
+                $post_arr['post_title'] = fuckin_epoch_dates( $post_title );
+                $new_post_date = fuckin_epoch_dates( $post_title );
                 $post_arr['post_content'] = '<!-- wp:shortcode -->
                 [video]
                 <!-- /wp:shortcode -->';
                 $post_arr['post_format'] = 'video';
+                $post_tag = 'Video';
             }
-
             $post_arr['post_status'] = $array['post_status'];
+            
+            // if ( is_timestamp ( date('Y-m-d H:i:s', $post_title ) ) ){
+            //     $post_arr['post_title'] = date('dmY', $post_title);
+            //     $post_title = date('dmY', $post_title);
+            // }
 
-
-            if ( !is_timestamp ( $new_post_date ) ){
-                $time = strtotime("-1 year", time());
-                $date = date("Y-m-d H:i:s", $time);
-
-                $new_post_date = $date;
-            }
+            // if(isValidTimeStamp( $new_post_date )) {
+            //    var_dump (isValidTimeStamp( $new_post_date ));
+            // }
 
             $post_arr['post_date'] = $new_post_date;
             $post_arr['post_date_gmt'] = $new_post_date;
 
-            if ($is_test === false){
+            if ($is_test == false){
+                // var_dump( $post_arr );
                 $new_post_id = wp_insert_post( $post_arr, $wp_error );
                 $parent_id = $new_post_id;
+
+                // set_post_format( $parent_id, $post_arr['post_format'] );
+
+                wp_set_object_terms( $parent_id, Array( ucfirst($post_arr['post_format'] ) ), 'category' );
+                wp_set_post_tags( $parent_id, Array("Generated",  ucfirst($post_arr['post_format'])) );
+
+                $meta_table_name = $wpdb->prefix.'postmeta';
+                if (!$meta->_wp_attached_file){
+                    $meta_data_insert = array('meta_value' =>  $date->ID, 'meta_key' => "_wp_attached_file", "post_id" => $parent_id);
+                    $wpdb->insert($meta_table_name, $meta_data_insert );
+                } else{
+                    $meta_data_update = array('meta_value' =>  $date->ID);
+                    $meta_data_where = array('meta_key' => "_wp_attached_file", "post_id" => $parent_id);
+                    $wpdb->update($meta_table_name , $meta_data_update, $meta_data_where);
+                }
+
+
             } else {
                 $parent_id = 0;
             }
         }
+
+        // wp_set_post_tags( $date->ID, $post_tag );
 
         //ATTACHES MEDIA TO POSTS
         $media_arr = array(
@@ -416,45 +303,51 @@ function attach_media_to_post( $array ){
             // 'post_date_gmt' => get_gmt_from_date( $new_attach_date )
         );
 
-        if ($is_test === false){
+        if ($is_test == false){
             $thumbnail = set_post_thumbnail($parent_id, $date->ID);
             $media_post = wp_update_post( $media_arr, false );
-        } else {
-            var_dump( $post_arr );
-            var_dump( $media_arr );
-        }
+        } 
+        
+        var_dump( $post_arr );
+        var_dump( $media_arr );
     
     }
-
 }
+
+
 
 function attach2post__settings_section_callback(  ) { 
 
-    echo __( 'Create Posts and Galleries from Attachments with similar names & timestamps', 'code_' );
+	echo __( 'Create Posts and Galleries from Attachments with similar names & timestamps', 'code_' );
 
 }
 
+
 function attach2post__options_page(  ) { 
     ?>
-        <form action='admin.php?page=Attach2Posts' method='POST'>
+		<form action='admin.php?page=Attach2Posts' method='POST'>
 
-            <h2>Attach2Posts</h2>            
+			<h2>Attach2Posts</h2>
 
             <?php
 
             if ($_REQUEST['page'] == 'Attach2Posts' && isset($_POST['submit'])){
                 // var_dump( $_REQUEST);
-                var_dump( $_POST);
-                attach_media_to_post( $_POST );
+                // var_dump( $_POST);
+                // attach2post__attach_media_to_post( $_POST );
+                do_settings_sections( 'attach2postPluginPage' );
+            } else {
+                attach2post__form_input_render();
             }
 
 
-            attach2post__form_input_render();
+            
 
-            settings_fields( 'attach2postsPluginPage' );
-            // do_settings_sections( 'attach2postsPluginPage' );
-            submit_button('Run Update');
-            ?>
-        </form>
+			settings_fields( 'attach2postPluginPage' );
+			
+			submit_button('Run Update');
+			?>
+
+		</form>
     <?php
 }

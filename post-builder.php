@@ -28,7 +28,7 @@
 	}
 
 
-    function get_date_data( $array ){
+    function attach2post__get_date_data( $array ){
         global $wpdb;
         
         $query = "SELECT 
