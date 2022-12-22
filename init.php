@@ -1,13 +1,14 @@
 <?php
 /*
     Plugin Name: Attachments2Posts
-	Plugin URI: http://stage.diegoescobar.ca/plugins/Attach2Posts
+	Plugin URI: http://stage.diegoescobar.ca/blog/2022/12/22/attach2posts/
 	Description: Creates posts and galleries based on similarly named photos, typically by timestamp, & reorders upload folders
 	Author: Diego Esscobar
 	Author URI: https://diegoescobar.ca/
 	License: GPL v2 or later
     */
 
+include_once ('updates/init.php');
 include ("utils.php");
 include ("post-builder.php");
 
@@ -30,14 +31,11 @@ add_action( 'admin_menu', 'attach2post__add_admin_menu' );
 add_action( 'admin_init', 'attach2post__settings_init' );
 
 
-// fuckupthese_othersizes();
-
 function attach2post__add_admin_menu(  ) { 
 
 	add_menu_page( 'Attach2Posts', 'Attach2Posts', 'manage_options', 'Attach2Posts', 'attach2post__options_page' );
 
 }
-
 
 function attach2post__settings_init(  ) { 
 
@@ -103,14 +101,17 @@ function attach2post__form_input_render() {
     $mime_types = array_filter($wpdb->get_results( 'SELECT DISTINCT(post_mime_type) FROM wp_posts', ARRAY_A));
     
     if ( $mime_types['post_mime_type'][0] == "" ) {unset($mime_types[0]);}
-
-    ?>
-          <input name="text" 
+            
+            /*
+            <input name="text" 
             type="text" 
             value="" id="name"
             placeholder="Hello World">
-            <?php //var_dump ( get_post_types() ); ?>
+             //var_dump ( get_post_types() ); ?>
             <br/>
+
+            */
+            ?>
             <!-- TODO: Update to include custom post types --> 
             <select id="post_type" name="post_type">
                 <option value="post">Post</option>
@@ -135,15 +136,14 @@ function attach2post__form_input_render() {
             ?>
             </select>
             <br/>
+            <?php /*
             Comma Seperated Category List
             <textarea id="category_list" name="category">Gallery, </textarea>
-
+            *//*
             <br/>
             Comma Seperated Tags List
             <textarea id="tag_list" name="tag">{Video/Image},</textarea>
-            </select>
-    <?php
-
+            */
 }
 
 
@@ -329,19 +329,15 @@ function attach2post__options_page(  ) {
 
 			<h2>Attach2Posts</h2>
 
+            <p>Creates posts and galleries based on similarly named photos, typically by timestamp, & reorders upload folders</p>
             <?php
 
             if ($_REQUEST['page'] == 'Attach2Posts' && isset($_POST['submit'])){
-                // var_dump( $_REQUEST);
-                // var_dump( $_POST);
-                // attach2post__attach_media_to_post( $_POST );
+                attach2post__attach_media_to_post( $_POST );
                 do_settings_sections( 'attach2postPluginPage' );
             } else {
                 attach2post__form_input_render();
             }
-
-
-            
 
 			settings_fields( 'attach2postPluginPage' );
 			
